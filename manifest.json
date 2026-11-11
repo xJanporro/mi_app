@@ -1,0 +1,11 @@
+{
+  "background_color": "#ffffff",
+  "dir": "ltr",
+  "display": "standalone",
+  "name": "RegistraAPP",
+  "orientation": "any",
+  "scope": "/",
+  "short_name": "RegistraApp",
+  "start_url": "/",
+  "theme_color": "#9d0026"
+}
