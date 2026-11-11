@@ -1,11 +1,9 @@
 {
-  "background_color": "#ffffff",
-  "dir": "ltr",
-  "display": "standalone",
-  "name": "RegistraAPP",
-  "orientation": "any",
-  "scope": "/",
-  "short_name": "RegistraApp",
+  "name": "Mis Comercios",
+  "short_name": "Comercios",
   "start_url": "/",
-  "theme_color": "#9d0026"
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0f172a",
+  "icons": []
 }
