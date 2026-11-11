@@ -1,0 +1,923 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>MiDirectorio - Registro de Comercios y Productos</title>
+  
+  <!-- Manifest for PWA Support -->
+  <link rel="manifest" href="data:application/json;base64,ewogICJuYW1lIjogIk1pIERpcmVjdG9yaW8gZGUgQ29tZXJjaW9zIiwKICAic2hvcnRfbmFtZSI6ICJNaURpcmVjdG9yaW8iLAogICJzdGFydF91cmwiOiAiLiIsCiAgImRpc3BsYXkiOiAic3RhbmRhbG9uZSIsCiAgImJhY2tncm91bmRfY29sb3IiOiAiIzBmMTcyYSIsCiAgInRoZW1lX2NvbG9yIjogIiM2MzY2ZjEiCiN9">
+  <meta name="theme-color" content="#6366f1">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#eep2ff',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+            },
+            cashea: {
+              yellow: '#FACC15',
+              purple: '#6B21A8'
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Leaflet CSS & JS for Interactive Map -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <style>
+    /* Prevent text selection during fast tapping on mobile */
+    body {
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      touch-action: manipulation;
+    }
+    
+    /* Custom scrollbars */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #1e293b;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #475569;
+      border-radius: 9999px;
+    }
+
+    /* Custom Leaflet Map Adjustments for Dark Mode */
+    .leaflet-tile {
+      filter: brightness(0.85) contrast(1.1) saturate(0.9);
+    }
+    .leaflet-container {
+      background-color: #0f172a !important;
+      font-family: inherit;
+    }
+    .leaflet-popup-content-wrapper, .leaflet-popup-tip {
+      background-color: #1e293b !important;
+      color: #f8fafc !important;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+    }
+    .leaflet-popup-content {
+      margin: 12px 14px;
+      line-height: 1.4;
+    }
+
+    /* Marker Animation */
+    .pulse-marker {
+      animation: pulse-ring 2s cubic-bezier(0.455, 0.03, 0.515, 0.955) infinite;
+    }
+    @keyframes pulse-ring {
+      0% { transform: scale(0.95); opacity: 0.9; }
+      50% { transform: scale(1.08); opacity: 1; }
+      100% { transform: scale(0.95); opacity: 0.9; }
+    }
+  </style>
+</head>
+
+<body class="bg-slate-900 text-slate-100 flex flex-col h-screen overflow-hidden font-sans antialiased select-none">
+
+  <!-- Top Header Bar -->
+  <header class="bg-slate-800/90 backdrop-blur border-b border-slate-700/80 px-4 py-3 flex justify-between items-center z-20 shrink-0">
+    <div class="flex items-center space-x-2">
+      <div class="bg-indigo-600 p-2 rounded-xl text-white shadow-lg shadow-indigo-500/30">
+        <i class="fa-solid fa-store text-lg"></i>
+      </div>
+      <div>
+        <h1 class="font-bold text-base leading-tight tracking-wide text-white">MiDirectorio</h1>
+        <p class="text-xs text-slate-400">Comercios & Cashea</p>
+      </div>
+    </div>
+    
+    <div class="flex items-center space-x-2">
+      <!-- Quick Backup Button -->
+      <button onclick="openBackupModal()" class="p-2.5 rounded-xl bg-slate-700 hover:bg-slate-600 text-slate-200 transition active:scale-95" title="Respaldar / Importar">
+        <i class="fa-solid fa-database text-sm"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Content Container (Dynamic Tabs) -->
+  <main class="flex-1 relative overflow-hidden bg-slate-950">
+    
+    <!-- Tab 1: Map View -->
+    <section id="tab-map" class="w-full h-full relative">
+      <div id="map" class="w-full h-full z-0"></div>
+      
+      <!-- Map Controls Overlay -->
+      <div class="absolute top-4 right-4 z-10 flex flex-col space-y-2">
+        <button onclick="locateUser()" class="p-3 bg-slate-800/90 backdrop-blur text-indigo-400 border border-slate-700 rounded-xl shadow-lg active:scale-95 text-sm font-semibold flex items-center justify-center">
+          <i class="fa-solid fa-location-crosshairs text-lg"></i>
+        </button>
+      </div>
+
+      <!-- Quick Info Bar at Bottom of Map -->
+      <div class="absolute bottom-4 left-4 right-4 z-10 bg-slate-800/90 backdrop-blur p-3 rounded-2xl border border-slate-700 shadow-xl flex items-center justify-between text-xs">
+        <div class="flex items-center space-x-3">
+          <span class="flex items-center"><span class="w-3 h-3 rounded-full bg-yellow-400 border border-yellow-200 inline-block mr-1.5 shadow-sm shadow-yellow-500"></span> Con Cashea</span>
+          <span class="flex items-center"><span class="w-3 h-3 rounded-full bg-indigo-500 inline-block mr-1.5"></span> Sin Cashea</span>
+        </div>
+        <span id="map-counter" class="text-slate-400 font-medium">0 comercios</span>
+      </div>
+    </section>
+
+    <!-- Tab 2: Stores List View -->
+    <section id="tab-stores" class="w-full h-full overflow-y-auto p-4 hidden">
+      <!-- Filter and Search Header -->
+      <div class="mb-4 space-y-3">
+        <div class="relative">
+          <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-3.5 text-slate-400 text-sm"></i>
+          <input type="text" id="search-store-input" oninput="renderStoreList()" placeholder="Buscar comercio por nombre o categoría..." class="w-full bg-slate-800 border border-slate-700 text-slate-100 text-sm rounded-xl pl-10 pr-4 py-3 focus:outline-none focus:border-indigo-500 transition">
+        </div>
+        
+        <!-- Filter Pills -->
+        <div class="flex items-center space-x-2 overflow-x-auto pb-1">
+          <button onclick="setFilter('all')" id="filter-all" class="filter-btn px-3.5 py-1.5 rounded-full text-xs font-semibold bg-indigo-600 text-white shadow-sm">Todos</button>
+          <button onclick="setFilter('cashea')" id="filter-cashea" class="filter-btn px-3.5 py-1.5 rounded-full text-xs font-semibold bg-slate-800 text-slate-300 border border-slate-700 flex items-center space-x-1">
+            <i class="fa-solid fa-bolt text-yellow-400 text-xs"></i>
+            <span>Solo Cashea</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Stores Container -->
+      <div id="stores-list-container" class="space-y-3 pb-20">
+        <!-- Dynamic Store Cards Generated Here -->
+      </div>
+    </section>
+
+    <!-- Tab 3: Add / Edit Store Form -->
+    <section id="tab-add" class="w-full h-full overflow-y-auto p-4 hidden">
+      <div class="max-w-md mx-auto bg-slate-800 rounded-2xl p-5 border border-slate-700/80 shadow-xl mb-20">
+        <h2 id="form-title" class="text-lg font-bold text-white mb-4 flex items-center">
+          <i class="fa-solid fa-store-slash text-indigo-400 mr-2"></i> Registrar Nuevo Comercio
+        </h2>
+
+        <form id="store-form" onsubmit="handleSaveStore(event)" class="space-y-4">
+          <input type="hidden" id="store-id">
+
+          <!-- Store Name -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Nombre del Comercio *</label>
+            <input type="text" id="store-name" required placeholder="Ej: Electrónica San José" class="w-full bg-slate-900 border border-slate-700 text-slate-100 text-sm rounded-xl px-3.5 py-2.5 focus:outline-none focus:border-indigo-500 transition">
+          </div>
+
+          <!-- Category -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Categoría</label>
+            <input type="text" id="store-category" placeholder="Ej: Ropa, Tecnología, Víveres" class="w-full bg-slate-900 border border-slate-700 text-slate-100 text-sm rounded-xl px-3.5 py-2.5 focus:outline-none focus:border-indigo-500 transition">
+          </div>
+
+          <!-- Cashea Toggle Switch -->
+          <div class="flex items-center justify-between bg-slate-900/80 p-3.5 rounded-xl border border-slate-700/60">
+            <div class="flex items-center space-x-2.5">
+              <div class="w-8 h-8 rounded-lg bg-yellow-400/20 text-yellow-400 flex items-center justify-center font-bold">
+                <i class="fa-solid fa-bolt"></i>
+              </div>
+              <div>
+                <span class="block text-sm font-semibold text-white">¿Acepta Cashea?</span>
+                <span class="block text-xs text-slate-400">Permite pagar en cuotas sin interés</span>
+              </div>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" id="store-cashea" class="sr-only peer">
+              <div class="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-500"></div>
+            </label>
+          </div>
+
+          <!-- Map Location Picker -->
+          <div>
+            <div class="flex justify-between items-center mb-1">
+              <label class="text-xs font-semibold text-slate-300 uppercase tracking-wider">Ubicación en el Mapa *</label>
+              <button type="button" onclick="getCurrentLocationForForm()" class="text-xs text-indigo-400 hover:text-indigo-300 flex items-center space-x-1">
+                <i class="fa-solid fa-location-crosshairs"></i>
+                <span>Usar mi posición</span>
+              </button>
+            </div>
+            <p class="text-xs text-slate-400 mb-2">Mueve el mapa para colocar el pin en la posición exacta del comercio.</p>
+            
+            <div id="picker-map" class="w-full h-48 rounded-xl border border-slate-700 overflow-hidden relative mb-2"></div>
+            
+            <div class="grid grid-cols-2 gap-2 text-xs">
+              <div>
+                <span class="text-slate-400">Latitud:</span>
+                <input type="text" id="store-lat" readonly class="w-full bg-slate-900 border border-slate-700/60 text-slate-300 rounded-lg px-2.5 py-1.5 font-mono text-xs">
+              </div>
+              <div>
+                <span class="text-slate-400">Longitud:</span>
+                <input type="text" id="store-lng" readonly class="w-full bg-slate-900 border border-slate-700/60 text-slate-300 rounded-lg px-2.5 py-1.5 font-mono text-xs">
+              </div>
+            </div>
+          </div>
+
+          <!-- Additional Notes -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Notas o Referencia</label>
+            <textarea id="store-notes" rows="2" placeholder="Ej: Frente a la plaza, nivel 1 CC..." class="w-full bg-slate-900 border border-slate-700 text-slate-100 text-sm rounded-xl px-3.5 py-2.5 focus:outline-none focus:border-indigo-500 transition"></textarea>
+          </div>
+
+          <!-- Form Buttons -->
+          <div class="flex space-x-3 pt-2">
+            <button type="button" onclick="resetForm(); switchTab('stores');" class="w-1/2 py-3 bg-slate-700 hover:bg-slate-600 text-slate-200 font-semibold rounded-xl text-sm transition active:scale-95">
+              Cancelar
+            </button>
+            <button type="submit" class="w-1/2 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl text-sm shadow-lg shadow-indigo-600/30 transition active:scale-95 flex justify-center items-center">
+              <i class="fa-solid fa-floppy-disk mr-2"></i> Guardar
+            </button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Bottom Navigation Bar (Mobile Friendly) -->
+  <nav class="bg-slate-800/95 backdrop-blur border-t border-slate-700/80 px-6 py-2 flex justify-around items-center z-20 shrink-0">
+    <button onclick="switchTab('map')" id="nav-map" class="nav-btn flex flex-col items-center text-indigo-400 transition">
+      <i class="fa-solid fa-map-location-dot text-lg mb-0.5"></i>
+      <span class="text-[10px] font-semibold">Mapa</span>
+    </button>
+    
+    <button onclick="switchTab('stores')" id="nav-stores" class="nav-btn flex flex-col items-center text-slate-400 hover:text-slate-200 transition">
+      <i class="fa-solid fa-store text-lg mb-0.5"></i>
+      <span class="text-[10px] font-semibold">Comercios</span>
+    </button>
+
+    <button onclick="prepareAddStore()" id="nav-add" class="nav-btn flex flex-col items-center text-slate-400 hover:text-slate-200 transition">
+      <div class="w-10 h-10 -mt-5 bg-indigo-600 rounded-full border-4 border-slate-900 text-white flex items-center justify-center shadow-lg shadow-indigo-500/40 active:scale-90 transition">
+        <i class="fa-solid fa-plus text-base"></i>
+      </div>
+      <span class="text-[10px] font-semibold mt-0.5">Nuevo</span>
+    </button>
+  </nav>
+
+  <!-- MODAL: Store Products Details -->
+  <div id="modal-products" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex flex-col justify-end sm:justify-center p-0 sm:p-4">
+    <div class="bg-slate-800 w-full max-w-lg mx-auto rounded-t-3xl sm:rounded-2xl max-h-[90vh] flex flex-col border border-slate-700 shadow-2xl overflow-hidden animate-slide-up">
+      
+      <!-- Modal Header -->
+      <div class="p-4 border-b border-slate-700 flex justify-between items-start bg-slate-800/90">
+        <div>
+          <div class="flex items-center space-x-2">
+            <h3 id="modal-store-name" class="font-bold text-lg text-white">Nombre del Comercio</h3>
+            <span id="modal-store-cashea" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-yellow-400/20 text-yellow-300 border border-yellow-400/40 hidden">CASHEA</span>
+          </div>
+          <p id="modal-store-category" class="text-xs text-indigo-400 font-medium">Categoría</p>
+          <p id="modal-store-notes" class="text-xs text-slate-400 mt-1 italic"></p>
+        </div>
+        <button onclick="closeProductsModal()" class="p-2 text-slate-400 hover:text-white rounded-full">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <!-- Modal Body (Products List) -->
+      <div class="flex-1 overflow-y-auto p-4 space-y-4">
+        
+        <!-- Add Product Sub-form -->
+        <div class="bg-slate-900/90 p-3.5 rounded-xl border border-slate-700/80">
+          <h4 class="text-xs font-bold text-slate-300 uppercase tracking-wider mb-2 flex items-center justify-between">
+            <span>Añadir Producto a este comercio</span>
+            <i class="fa-solid fa-box text-indigo-400"></i>
+          </h4>
+          <form id="product-form" onsubmit="handleAddProduct(event)" class="space-y-2">
+            <input type="hidden" id="product-store-id">
+            <div class="grid grid-cols-3 gap-2">
+              <input type="text" id="prod-name" required placeholder="Nombre (Ej: Zapato Talla 40)" class="col-span-2 bg-slate-800 border border-slate-700 text-white text-xs rounded-lg p-2.5 focus:outline-none focus:border-indigo-500">
+              <input type="number" step="0.01" id="prod-price" required placeholder="Precio $" class="col-span-1 bg-slate-800 border border-slate-700 text-white text-xs rounded-lg p-2.5 focus:outline-none focus:border-indigo-500">
+            </div>
+            <input type="text" id="prod-desc" placeholder="Descripción breve opcional..." class="w-full bg-slate-800 border border-slate-700 text-white text-xs rounded-lg p-2.5 focus:outline-none focus:border-indigo-500">
+            <button type="submit" class="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs rounded-lg shadow transition active:scale-95 flex items-center justify-center">
+              <i class="fa-solid fa-plus mr-1.5"></i> Agregar Producto
+            </button>
+          </form>
+        </div>
+
+        <!-- Registered Products Listing -->
+        <div>
+          <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Productos Registrados (<span id="prod-count">0</span>)</h4>
+          <div id="products-container" class="space-y-2">
+            <!-- Dynamic Products HTML -->
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="p-3 border-t border-slate-700 bg-slate-900/60 flex justify-end">
+        <button onclick="closeProductsModal()" class="px-5 py-2 bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl">
+          Cerrar
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- MODAL: Data Backup & Restore -->
+  <div id="modal-backup" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-800 w-full max-w-sm rounded-2xl p-5 border border-slate-700 shadow-2xl space-y-4">
+      <div class="flex justify-between items-center border-b border-slate-700 pb-3">
+        <h3 class="font-bold text-white text-base flex items-center">
+          <i class="fa-solid fa-database text-indigo-400 mr-2"></i> Copia de Seguridad
+        </h3>
+        <button onclick="closeBackupModal()" class="text-slate-400 hover:text-white">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <p class="text-xs text-slate-300">
+        Puedes respaldar tus comercios y productos en un archivo JSON o restaurarlos en otro dispositivo.
+      </p>
+
+      <!-- Action Buttons -->
+      <div class="space-y-2 pt-1">
+        <button onclick="exportDataJSON()" class="w-full py-2.5 bg-slate-700 hover:bg-slate-600 text-white text-xs font-semibold rounded-xl flex items-center justify-center transition active:scale-95 border border-slate-600">
+          <i class="fa-solid fa-download mr-2 text-indigo-400"></i> Descargar Respaldo (.json)
+        </button>
+
+        <label class="w-full py-2.5 bg-slate-700 hover:bg-slate-600 text-white text-xs font-semibold rounded-xl flex items-center justify-center transition active:scale-95 border border-slate-600 cursor-pointer">
+          <i class="fa-solid fa-upload mr-2 text-emerald-400"></i> Restaurar / Importar (.json)
+          <input type="file" id="import-file" accept=".json" onchange="importDataJSON(event)" class="hidden">
+        </label>
+      </div>
+
+      <div class="text-[11px] text-slate-500 text-center pt-2 border-t border-slate-700/60">
+        Los datos permanecen almacenados únicamente en este teléfono.
+      </div>
+    </div>
+  </div>
+
+  <!-- Notification Toast Component -->
+  <div id="toast" class="fixed top-4 left-1/2 -translate-x-1/2 bg-indigo-600 text-white text-xs font-semibold px-4 py-2.5 rounded-full shadow-2xl z-50 opacity-0 transition-opacity duration-300 pointer-events-none flex items-center space-x-2 border border-indigo-400/40">
+    <i class="fa-solid fa-circle-check"></i>
+    <span id="toast-message">Notificación</span>
+  </div>
+
+  <!-- Application Logic -->
+  <script>
+    // App State Management
+    let stores = [];
+    let activeTab = 'map';
+    let currentFilter = 'all';
+    let map = null;
+    let pickerMap = null;
+    let mapMarkers = {};
+    let pickerMarker = null;
+
+    // Default map coordinates (Caracas, Venezuela default, auto-relocates to user GPS if allowed)
+    const DEFAULT_LAT = 8.57899;
+    const DEFAULT_LNG = -71.16922;
+
+    // Initialization on window load
+    window.onload = function() {
+      loadStoresFromStorage();
+      initMainMap();
+      initPickerMap();
+      renderStoreList();
+      updateMapMarkers();
+      
+      // Try to center map on user's current GPS location on start
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(position => {
+          const lat = position.coords.latitude;
+          const lng = position.coords.longitude;
+          if (map) map.setView([lat, lng], 14);
+        }, () => {});
+      }
+    };
+
+    // Load Data from LocalStorage
+    function loadStoresFromStorage() {
+      try {
+        const data = localStorage.getItem('midirectorio_stores');
+        stores = data ? JSON.parse(data) : [];
+      } catch (e) {
+        stores = [];
+        console.error("Error cargando de localStorage", e);
+      }
+    }
+
+    // Save Data to LocalStorage
+    function saveStoresToStorage() {
+      localStorage.setItem('midirectorio_stores', JSON.stringify(stores));
+      updateMapMarkers();
+      renderStoreList();
+    }
+
+    // UI Tab Switcher
+    function switchTab(tabName) {
+      activeTab = tabName;
+      
+      // Hide all tabs
+      document.getElementById('tab-map').classList.add('hidden');
+      document.getElementById('tab-stores').classList.add('hidden');
+      document.getElementById('tab-add').classList.add('hidden');
+
+      // Reset Nav Buttons Style
+      document.querySelectorAll('.nav-btn').forEach(btn => {
+        btn.classList.remove('text-indigo-400');
+        btn.classList.add('text-slate-400');
+      });
+
+      // Show Selected Tab
+      document.getElementById(`tab-${tabName}`).classList.remove('hidden');
+      document.getElementById(`nav-${tabName}`).classList.remove('text-slate-400');
+      document.getElementById(`nav-${tabName}`).classList.add('text-indigo-400');
+
+      // Refresh leaflet map layout when changing to map view
+      if (tabName === 'map' && map) {
+        setTimeout(() => { map.invalidateSize(); }, 200);
+      }
+      if (tabName === 'add' && pickerMap) {
+        setTimeout(() => { pickerMap.invalidateSize(); }, 200);
+      }
+    }
+
+    // Initialize Main Interactive Map
+    function initMainMap() {
+      map = L.map('map', { zoomControl: false }).setView([DEFAULT_LAT, DEFAULT_LNG], 13);
+
+      // L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      //   maxZoom: 19,
+      //   attribution: '© OpenStreetMap'
+      // }).addTo(map);
+
+      L.tileLayer('https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png?key=cb1_5742_1_7cdfe490ea8489139c703fe4', {
+    maxZoom: 19,
+    subdomains: 'abcd',
+    attribution: '&copy; <a href="https://carto.com/">CARTO</a>'
+}).addTo(map);
+
+      // Add custom zoom control in nice position
+      L.control.zoom({ position: 'topleft' }).addTo(map);
+    }
+
+    // Initialize Picker Map for Form
+    function initPickerMap() {
+      pickerMap = L.map('picker-map', { zoomControl: false }).setView([DEFAULT_LAT, DEFAULT_LNG], 14);
+
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19
+      }).addTo(pickerMap);
+
+      // Draggable marker for picking coordinates
+      pickerMarker = L.marker([DEFAULT_LAT, DEFAULT_LNG], { draggable: true }).addTo(pickerMap);
+
+      const updateInputs = (lat, lng) => {
+        document.getElementById('store-lat').value = lat.toFixed(6);
+        document.getElementById('store-lng').value = lng.toFixed(6);
+      };
+
+      updateInputs(DEFAULT_LAT, DEFAULT_LNG);
+
+      pickerMarker.on('dragend', function (e) {
+        const coord = e.target.getLatLng();
+        updateInputs(coord.lat, coord.lng);
+      });
+
+      pickerMap.on('click', function (e) {
+        pickerMarker.setLatLng(e.latlng);
+        updateInputs(e.latlng.lat, e.latlng.lng);
+      });
+    }
+
+    // Create Custom Icon for Markers
+    function createMarkerIcon(hasCashea) {
+      const colorClass = hasCashea ? 'bg-yellow-400 text-slate-900 border-yellow-200 shadow-yellow-500/50' : 'bg-indigo-600 text-white border-indigo-400 shadow-indigo-500/50';
+      const icon = hasCashea ? '<i class="fa-solid fa-bolt text-xs"></i>' : '<i class="fa-solid fa-store text-xs"></i>';
+      
+      return L.divIcon({
+        className: 'custom-leaflet-marker',
+        html: `<div class="w-8 h-8 rounded-full ${colorClass} border-2 flex items-center justify-center shadow-lg transition transform hover:scale-110 pulse-marker">${icon}</div>`,
+        iconSize: [32, 32],
+        iconAnchor: [16, 16],
+        popupAnchor: [0, -16]
+      });
+    }
+
+    // Update Main Map Markers
+    function updateMapMarkers() {
+      if (!map) return;
+
+      // Clear existing markers
+      Object.values(mapMarkers).forEach(marker => map.removeLayer(marker));
+      mapMarkers = {};
+
+      let visibleCount = 0;
+
+      stores.forEach(store => {
+        const marker = L.marker([store.lat, store.lng], {
+          icon: createMarkerIcon(store.cashea)
+        }).addTo(map);
+
+        const casheaBadge = store.cashea 
+          ? `<span class="inline-block bg-yellow-400 text-slate-900 text-[10px] font-extrabold px-2 py-0.5 rounded-full mt-1"><i class="fa-solid fa-bolt"></i> CASHEA</span>` 
+          : '';
+
+        const popupContent = `
+          <div class="text-xs">
+            <h4 class="font-bold text-sm text-white mb-0.5">${escapeHTML(store.name)}</h4>
+            <p class="text-indigo-400 font-medium">${escapeHTML(store.category || 'Sin categoría')}</p>
+            ${casheaBadge}
+            <div class="mt-2.5 pt-2 border-t border-slate-700 flex justify-between items-center">
+              <span class="text-slate-400">${store.products ? store.products.length : 0} productos</span>
+              <button onclick="openProductsModal('${store.id}')" class="bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-semibold px-2.5 py-1 rounded-lg">
+                Ver / Añadir
+              </button>
+            </div>
+          </div>
+        `;
+
+        marker.bindPopup(popupContent);
+        mapMarkers[store.id] = marker;
+        visibleCount++;
+      });
+
+      document.getElementById('map-counter').innerText = `${visibleCount} comercio(s)`;
+    }
+
+    // Locate User via GPS
+    function locateUser() {
+      if (!navigator.geolocation) {
+        showToast("Geolocalización no soportada por el navegador");
+        return;
+      }
+      showToast("Buscando tu posición...");
+      navigator.geolocation.getCurrentPosition(position => {
+        const lat = position.coords.latitude;
+        const lng = position.coords.longitude;
+        map.setView([lat, lng], 16);
+        showToast("Ubicación actualizada");
+      }, err => {
+        showToast("No se pudo obtener la posición GPS");
+      });
+    }
+
+    // Get Location for Store Form
+    function getCurrentLocationForForm() {
+      if (!navigator.geolocation) return;
+      showToast("Obteniendo coordenadas...");
+      navigator.geolocation.getCurrentPosition(position => {
+        const lat = position.coords.latitude;
+        const lng = position.coords.longitude;
+        pickerMap.setView([lat, lng], 16);
+        pickerMarker.setLatLng([lat, lng]);
+        document.getElementById('store-lat').value = lat.toFixed(6);
+        document.getElementById('store-lng').value = lng.toFixed(6);
+        showToast("Posición fijada en el formulario");
+      });
+    }
+
+    // Filter Stores Functionality
+    function setFilter(type) {
+      currentFilter = type;
+      document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.classList.remove('bg-indigo-600', 'text-white');
+        btn.classList.add('bg-slate-800', 'text-slate-300');
+      });
+
+      const activeBtn = document.getElementById(`filter-${type}`);
+      if (activeBtn) {
+        activeBtn.classList.remove('bg-slate-800', 'text-slate-300');
+        activeBtn.classList.add('bg-indigo-600', 'text-white');
+      }
+
+      renderStoreList();
+    }
+
+    // Render Store List View
+    function renderStoreList() {
+      const container = document.getElementById('stores-list-container');
+      const searchQuery = document.getElementById('search-store-input').value.toLowerCase();
+
+      const filtered = stores.filter(store => {
+        const matchesSearch = store.name.toLowerCase().includes(searchQuery) || 
+                              (store.category && store.category.toLowerCase().includes(searchQuery));
+        const matchesCashea = currentFilter === 'cashea' ? store.cashea : true;
+        return matchesSearch && matchesCashea;
+      });
+
+      if (filtered.length === 0) {
+        container.innerHTML = `
+          <div class="text-center py-12 text-slate-500">
+            <i class="fa-solid fa-store-slash text-4xl mb-3"></i>
+            <p class="text-sm font-medium">No se encontraron comercios registrados.</p>
+            <p class="text-xs mt-1">Presiona "Nuevo" para registrar uno.</p>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = filtered.map(store => `
+        <div class="bg-slate-800 border border-slate-700/80 rounded-2xl p-4 shadow-lg flex flex-col justify-between space-y-3">
+          <div class="flex justify-between items-start">
+            <div>
+              <div class="flex items-center space-x-2">
+                <h3 class="font-bold text-base text-white">${escapeHTML(store.name)}</h3>
+                ${store.cashea ? '<span class="bg-yellow-400/20 text-yellow-300 border border-yellow-400/40 text-[10px] font-extrabold px-2 py-0.5 rounded-full"><i class="fa-solid fa-bolt"></i> CASHEA</span>' : ''}
+              </div>
+              <p class="text-xs text-indigo-400 font-medium mt-0.5">${escapeHTML(store.category || 'Sin categoría')}</p>
+              ${store.notes ? `<p class="text-xs text-slate-400 mt-1"><i class="fa-regular fa-note-sticky mr-1"></i>${escapeHTML(store.notes)}</p>` : ''}
+            </div>
+          </div>
+
+          <div class="flex items-center justify-between pt-2 border-t border-slate-700/60 text-xs">
+            <span class="text-slate-400">
+              <i class="fa-solid fa-boxes-stacked mr-1"></i> ${(store.products || []).length} Productos
+            </span>
+            <div class="flex space-x-2">
+              <button onclick="centerMapOnStore(${store.lat}, ${store.lng})" class="px-2.5 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg transition active:scale-95" title="Ver en Mapa">
+                <i class="fa-solid fa-map-pin text-indigo-400"></i>
+              </button>
+              <button onclick="prepareEditStore('${store.id}')" class="px-2.5 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg transition active:scale-95" title="Editar">
+                <i class="fa-solid fa-pen text-amber-400"></i>
+              </button>
+              <button onclick="deleteStore('${store.id}')" class="px-2.5 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg transition active:scale-95" title="Eliminar">
+                <i class="fa-solid fa-trash-can text-rose-400"></i>
+              </button>
+              <button onclick="openProductsModal('${store.id}')" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-lg shadow transition active:scale-95">
+                Productos
+              </button>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // Save/Update Store Action
+    function handleSaveStore(e) {
+      e.preventDefault();
+
+      const id = document.getElementById('store-id').value;
+      const name = document.getElementById('store-name').value.trim();
+      const category = document.getElementById('store-category').value.trim();
+      const cashea = document.getElementById('store-cashea').checked;
+      const lat = parseFloat(document.getElementById('store-lat').value);
+      const lng = parseFloat(document.getElementById('store-lng').value);
+      const notes = document.getElementById('store-notes').value.trim();
+
+      if (id) {
+        // Edit existing
+        const index = stores.findIndex(s => s.id === id);
+        if (index !== -1) {
+          stores[index] = { ...stores[index], name, category, cashea, lat, lng, notes };
+          showToast("Comercio actualizado correctamente");
+        }
+      } else {
+        // Create new
+        const newStore = {
+          id: 'store_' + Date.now(),
+          name,
+          category,
+          cashea,
+          lat,
+          lng,
+          notes,
+          products: []
+        };
+        stores.push(newStore);
+        showToast("Comercio registrado con éxito");
+      }
+
+      saveStoresToStorage();
+      resetForm();
+      switchTab('stores');
+    }
+
+    // Reset Store Form
+    function resetForm() {
+      document.getElementById('store-form').reset();
+      document.getElementById('store-id').value = '';
+      document.getElementById('form-title').innerHTML = '<i class="fa-solid fa-store text-indigo-400 mr-2"></i> Registrar Nuevo Comercio';
+      if (pickerMap) {
+        pickerMap.setView([DEFAULT_LAT, DEFAULT_LNG], 14);
+        pickerMarker.setLatLng([DEFAULT_LAT, DEFAULT_LNG]);
+        document.getElementById('store-lat').value = DEFAULT_LAT.toFixed(6);
+        document.getElementById('store-lng').value = DEFAULT_LNG.toFixed(6);
+      }
+    }
+
+    // Prepare Store Form for Creating
+    function prepareAddStore() {
+      resetForm();
+      switchTab('add');
+      getCurrentLocationForForm();
+    }
+
+    // Prepare Store Form for Editing
+    function prepareEditStore(id) {
+      const store = stores.find(s => s.id === id);
+      if (!store) return;
+
+      document.getElementById('store-id').value = store.id;
+      document.getElementById('store-name').value = store.name;
+      document.getElementById('store-category').value = store.category || '';
+      document.getElementById('store-cashea').checked = store.cashea;
+      document.getElementById('store-lat').value = store.lat;
+      document.getElementById('store-lng').value = store.lng;
+      document.getElementById('store-notes').value = store.notes || '';
+
+      document.getElementById('form-title').innerHTML = '<i class="fa-solid fa-pen-to-square text-amber-400 mr-2"></i> Editar Comercio';
+
+      if (pickerMap) {
+        pickerMap.setView([store.lat, store.lng], 16);
+        pickerMarker.setLatLng([store.lat, store.lng]);
+      }
+
+      switchTab('add');
+    }
+
+    // Delete Store Action
+    function deleteStore(id) {
+      if (confirm("¿Estás seguro de eliminar este comercio y todos sus productos?")) {
+        stores = stores.filter(s => s.id !== id);
+        saveStoresToStorage();
+        showToast("Comercio eliminado");
+      }
+    }
+
+    // Center Map on Selected Store
+    function centerMapOnStore(lat, lng) {
+      switchTab('map');
+      if (map) {
+        map.setView([lat, lng], 17);
+      }
+    }
+
+    // Modal Products Functionality
+    function openProductsModal(storeId) {
+      const store = stores.find(s => s.id === storeId);
+      if (!store) return;
+
+      document.getElementById('product-store-id').value = store.id;
+      document.getElementById('modal-store-name').innerText = store.name;
+      document.getElementById('modal-store-category').innerText = store.category || 'Sin categoría';
+      document.getElementById('modal-store-notes').innerText = store.notes ? `Nota: ${store.notes}` : '';
+
+      const casheaBadge = document.getElementById('modal-store-cashea');
+      if (store.cashea) {
+        casheaBadge.classList.remove('hidden');
+      } else {
+        casheaBadge.classList.add('hidden');
+      }
+
+      renderProductsList(store);
+      document.getElementById('modal-products').classList.remove('hidden');
+    }
+
+    function closeProductsModal() {
+      document.getElementById('modal-products').classList.add('hidden');
+      document.getElementById('product-form').reset();
+    }
+
+    // Render Products Inside Modal
+    function renderProductsList(store) {
+      const container = document.getElementById('products-container');
+      const products = store.products || [];
+
+      document.getElementById('prod-count').innerText = products.length;
+
+      if (products.length === 0) {
+        container.innerHTML = `
+          <div class="text-center py-6 text-slate-500 bg-slate-900/50 rounded-xl border border-slate-800">
+            <p class="text-xs">No hay productos registrados aún en este comercio.</p>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = products.map((prod, idx) => `
+        <div class="bg-slate-900 p-3 rounded-xl border border-slate-700/70 flex justify-between items-center">
+          <div>
+            <h5 class="font-bold text-sm text-white">${escapeHTML(prod.name)}</h5>
+            ${prod.desc ? `<p class="text-xs text-slate-400">${escapeHTML(prod.desc)}</p>` : ''}
+            <span class="inline-block mt-1 font-bold text-indigo-400 text-xs">$${parseFloat(prod.price).toFixed(2)} USD</span>
+          </div>
+          <button onclick="handleDeleteProduct('${store.id}', ${idx})" class="p-2 text-rose-400 hover:text-rose-300 rounded-lg">
+            <i class="fa-solid fa-trash-can text-xs"></i>
+          </button>
+        </div>
+      `).join('');
+    }
+
+    // Add Product Form Handler
+    function handleAddProduct(e) {
+      e.preventDefault();
+      const storeId = document.getElementById('product-store-id').value;
+      const name = document.getElementById('prod-name').value.trim();
+      const price = parseFloat(document.getElementById('prod-price').value);
+      const desc = document.getElementById('prod-desc').value.trim();
+
+      const store = stores.find(s => s.id === storeId);
+      if (store) {
+        if (!store.products) store.products = [];
+        store.products.push({ name, price, desc, id: 'prod_' + Date.now() });
+        saveStoresToStorage();
+        renderProductsList(store);
+        document.getElementById('product-form').reset();
+        showToast("Producto añadido");
+      }
+    }
+
+    // Delete Product Action
+    function handleDeleteProduct(storeId, index) {
+      const store = stores.find(s => s.id === storeId);
+      if (store && store.products) {
+        store.products.splice(index, 1);
+        saveStoresToStorage();
+        renderProductsList(store);
+        showToast("Producto eliminado");
+      }
+    }
+
+    // Backup & Restore Modals
+    function openBackupModal() {
+      document.getElementById('modal-backup').classList.remove('hidden');
+    }
+
+    function closeBackupModal() {
+      document.getElementById('modal-backup').classList.add('hidden');
+    }
+
+    // Export JSON Backup
+    function exportDataJSON() {
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(stores, null, 2));
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", `midirectorio_backup_${new Date().toISOString().slice(0,10)}.json`);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+      showToast("Copia de seguridad descargada");
+    }
+
+    // Import JSON Backup
+    function importDataJSON(event) {
+      const fileReader = new FileReader();
+      fileReader.onload = function(e) {
+        try {
+          const importedStores = JSON.parse(e.target.result);
+          if (Array.isArray(importedStores)) {
+            stores = importedStores;
+            saveStoresToStorage();
+            closeBackupModal();
+            showToast("Datos importados correctamente");
+          } else {
+            alert("El archivo no tiene el formato correcto.");
+          }
+        } catch (error) {
+          alert("Error al leer el archivo JSON.");
+        }
+      };
+      if (event.target.files[0]) {
+        fileReader.readAsText(event.target.files[0]);
+      }
+    }
+
+    // Helper: Show Temporary Toast Message
+    function showToast(message) {
+      const toast = document.getElementById('toast');
+      document.getElementById('toast-message').innerText = message;
+      toast.classList.remove('opacity-0');
+      toast.classList.add('opacity-100');
+      setTimeout(() => {
+        toast.classList.remove('opacity-100');
+        toast.classList.add('opacity-0');
+      }, 2500);
+    }
+
+    // Helper: Escape HTML to Prevent XSS
+    function escapeHTML(str) {
+      if (!str) return '';
+      return str.replace(/[&<>'"]/g, 
+        tag => ({
+          '&': '&amp;',
+          '<': '&lt;',
+          '>': '&gt;',
+          "'": '&#39;',
+          '"': '&quot;'
+        }[tag] || tag)
+      );
+    }
+  </script>
+</body>
+</html>
